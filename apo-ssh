@@ -1,0 +1,83 @@
+#!/bin/sh
+
+# Set this in your profile
+# PAM_AUTH_PROVIDER="google"
+
+# DEBUG=1
+PAM_CACHE_DIR=~/.pamcache
+PAM_TOKEN=${PAM_CACHE_DIR}/token
+PAM_CERT=${PAM_CACHE_DIR}/cert
+
+SSH_BIN=/usr/bin/ssh
+
+set -x
+
+main() {
+  [[ $APOCTL_NAMESPACE ]] || { err "Please set APOCTL_NAMESPACE"; return 2; }
+  [[ $PAM_AUTH_PROVIDER ]] || { err "Please set PAM_AUTH_PROVIDER"; return 2; }
+
+  [ -f ~/.ssh/aporeto-ecdsa ] || { 
+    _debug "Key ~/.ssh/aporeto-ecdsa does NOT exist, creating"
+    ssh-keygen -t ecdsa -f ~/.ssh/aporeto-ecdsa -q -P "" > /dev/null 2>&1 || { err "keygen failed"; return 2; }
+  }
+
+  mkdir -p $PAM_CACHE_DIR || { err "Failed to create directory $PAM_CACHE_DIR"; return 2; }
+  
+  get_token || { err "Failed to get token"; return 3; }
+  get_cert || { err "Failed to get cert"; return 3; }
+
+  # Execute the ssh command with any args from the user
+  $SSH_BIN -i ~/.ssh/aporeto-ecdsa -i $PAM_CERT $@
+}
+
+get_token() {
+  _debug "get_token"
+  _validate() {
+    _debug "_validate"
+    [ -f $PAM_TOKEN ] || { _debug "File $PAM_TOKEN does not exist"; return 3; } 
+    local token_expire=$(cat $PAM_TOKEN | jwt | jq '.exp')
+    [[ $token_expire ]] && {
+      local adjusted_time=$(expr $(date +%s) - 600)
+      [ $token_expire -gt $adjusted_time ] && {
+        _debug "token valid"; return 0
+      } || { _debug "token expired"; rm -rf $PAM_TOKEN; return 4; }
+    } || { _debug "token invalid"; rm -rf $PAM_TOKEN; return 5; }
+  }
+
+  _validate && return 0
+  [[ $APOCTL_API ]] && {
+    apoctl auth $PAM_AUTH_PROVIDER --api $APOCTL_API > $PAM_TOKEN
+  } || {
+    apoctl auth $PAM_AUTH_PROVIDER > $PAM_TOKEN
+  }
+  _validate && return 0
+  err "Failed to get token"
+  return 3
+}
+
+get_cert() {
+  _debug "get_cert"
+  _validate() {
+    _debug "_validate"
+    [ -f $PAM_TOKEN ] || { _debug "File $PAM_TOKEN does not exist"; return 3; } 
+    [ -f $PAM_CERT ] || { _debug "File $PAM_CERT does not exist"; return 3; }
+    local cert_data=$(cat $PAM_CERT | apoctl ssh inspect)
+    local valid=$(echo $cert_data | grep Valid: | awk '{print $NF}')
+    [[ $valid ]] || { _debug "Cert corrupt"; rm -rf $PAM_CERT; return 3;  }
+    [[ "${valid:0:1}" == "-" ]] && { _debug "Cert expired"; rm -rf $PAM_CERT; return 4; }
+    _debug "cert valid"
+  }
+
+  _validate && return 0
+  apoctl ssh cert --public-key ~/.ssh/aporeto-ecdsa.pub --token $(<$PAM_TOKEN) \
+    --namespace $APOCTL_NAMESPACE > $PAM_CERT
+  chmod 400 $PAM_CERT
+  _validate && return 0
+  err "Failed to get cert"
+  return 3
+}
+
+_debug() { [[ $DEBUG -gt 0 ]] && { err "debug: $@"; }; }
+err() { echo "$@" 1>&2; }
+
+main $@
