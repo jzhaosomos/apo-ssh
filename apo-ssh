@@ -3,7 +3,6 @@
 # Set this in your profile
 # PAM_AUTH_PROVIDER="google"
 
-# DEBUG=1
 PAM_CACHE_DIR=~/.pamcache
 PAM_TOKEN=${PAM_CACHE_DIR}/token
 PAM_CERT=${PAM_CACHE_DIR}/cert
@@ -11,6 +10,7 @@ PAM_CERT=${PAM_CACHE_DIR}/cert
 SSH_BIN=/usr/bin/ssh
 
 # set -x
+DEBUG=0
 
 main() {
   [[ $APOCTL_NAMESPACE ]] || { err "Please set APOCTL_NAMESPACE"; return 2; }
@@ -42,6 +42,7 @@ get_token() {
         _debug "token valid"; return 0
       } || { _debug "token expired"; rm -rf $PAM_TOKEN; return 4; }
     } || { _debug "token invalid"; rm -rf $PAM_TOKEN; return 5; }
+  return 0
   }
 
   _validate && return 0
@@ -66,9 +67,11 @@ get_cert() {
     [[ $valid ]] || { _debug "Cert corrupt"; rm -rf $PAM_CERT; return 3;  }
     [[ "${valid:0:1}" == "-" ]] && { _debug "Cert expired"; rm -rf $PAM_CERT; return 4; }
     _debug "cert valid"
+    return 0
   }
 
   _validate && return 0
+  rm -rf $PAM_CERT
   apoctl ssh cert --public-key ~/.ssh/aporeto-ecdsa.pub --token $(<$PAM_TOKEN) \
     --namespace $APOCTL_NAMESPACE > $PAM_CERT
   chmod 400 $PAM_CERT
