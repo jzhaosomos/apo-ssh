@@ -10,7 +10,7 @@ PAM_CERT=${PAM_CACHE_DIR}/cert
 
 SSH_BIN=/usr/bin/ssh
 
-set -x
+# set -x
 
 main() {
   [[ $APOCTL_NAMESPACE ]] || { err "Please set APOCTL_NAMESPACE"; return 2; }
