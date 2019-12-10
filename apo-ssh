@@ -84,8 +84,7 @@ get_cert() {
     _debug "_validate"
     [ -f $PAM_TOKEN ] || { _debug "File $PAM_TOKEN does not exist"; return 3; } 
     [ -f $PAM_CERT ] || { _debug "File $PAM_CERT does not exist"; return 3; }
-    local cert_data=$(cat $PAM_CERT | apoctl ssh inspect)
-    local valid=$(echo $cert_data | grep Valid: | awk '{print $NF}')
+    local valid=$(cat $PAM_CERT | apoctl ssh inspect | grep Valid: | awk '{print $NF}')
     [[ $valid ]] || { _debug "Cert corrupt"; rm -rf $PAM_CERT; return 3;  }
     [[ "${valid:0:1}" == "-" ]] && { _debug "Cert expired"; rm -rf $PAM_CERT; return 4; }
     _debug "cert valid"
