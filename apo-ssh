@@ -28,6 +28,8 @@
 PAM_CACHE_DIR=~/.pamcache
 PAM_TOKEN=${PAM_CACHE_DIR}/token
 PAM_CERT=${PAM_CACHE_DIR}/cert
+PAM_AUTH_PROVIDER=Auth0
+APOCTL_NAMESPACE=/somos/dev
 
 SSH_BIN=/usr/bin/ssh
 
@@ -35,8 +37,6 @@ SSH_BIN=/usr/bin/ssh
 DEBUG=0
 
 main() {
-  [[ $APOCTL_NAMESPACE ]] || { err "Please set APOCTL_NAMESPACE"; return 2; }
-  [[ $PAM_AUTH_PROVIDER ]] || { err "Please set PAM_AUTH_PROVIDER"; return 2; }
 
   [ -f ~/.ssh/aporeto-ecdsa ] || { 
     _debug "Key ~/.ssh/aporeto-ecdsa does NOT exist, creating"
